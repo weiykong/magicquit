@@ -152,6 +152,7 @@ private struct QuitCountdownView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
+        .frame(width: 290)
         .background {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(.regularMaterial)

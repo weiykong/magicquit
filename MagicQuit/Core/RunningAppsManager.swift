@@ -2,6 +2,12 @@ import AppKit
 import Combine
 import os.log
 
+/// Why an automatic quit was triggered.
+enum QuitReason {
+    case idle
+    case windowClose
+}
+
 /// Tracks regular apps and quits them once they have been idle for the configured duration.
 @MainActor
 final class RunningAppsManager: ObservableObject {
@@ -43,7 +49,7 @@ final class RunningAppsManager: ObservableObject {
     init(settings: AppSettings) {
         self.settings = settings
         self.windowWatcher = WindowWatcher(settings: settings)
-        windowWatcher.terminateHandler = { [weak self] app in self?.quit(app) }
+        windowWatcher.terminateHandler = { [weak self] app in self?.quit(app, reason: .windowClose) }
 
         // If the app terminates on its own while the banner is up, close the banner.
         // The banner reaching zero calls terminateAfterGrace; the same expiry
@@ -202,7 +208,7 @@ final class RunningAppsManager: ObservableObject {
             if let sleepUntil = cancelSleepUntil[entry.app.processIdentifier], sleepUntil > now {
                 continue
             }
-            quit(entry.app)
+            quit(entry.app, reason: .idle)
         }
         scheduleDueCheck(now: now)
     }
@@ -250,8 +256,12 @@ final class RunningAppsManager: ObservableObject {
     /// Graceful quit with a countdown banner. Both the idle sweep and the
     /// window-close watcher use this so the user can cancel an automatic quit.
     /// The manual ✕ in the menu calls quitNowFromMenu and is instant.
-    func quit(_ app: NSRunningApplication) {
+    func quit(_ app: NSRunningApplication, reason: QuitReason = .idle) {
         guard !app.isTerminated else { return }
+        if !settings.confirmBeforeAutoQuit {
+            quitNow(app)
+            return
+        }
         if let presented = quitConfirmation.app, presented.processIdentifier == app.processIdentifier {
             log.info("Quit already pending for \(app.localizedName ?? "unknown", privacy: .public)")
             return
@@ -264,8 +274,12 @@ final class RunningAppsManager: ObservableObject {
         quitConfirmation.present(app, graceSeconds: Self.quitGraceSeconds) {
             // Cancel: settle the timer and back off if the user keeps cancelling.
             let pid = app.processIdentifier
-            self.resetTimer(for: pid)
-            self.windowWatcher.unwatch(pid)
+            switch reason {
+            case .idle:
+                self.resetTimer(for: pid)
+            case .windowClose:
+                self.windowWatcher.unwatch(pid)
+            }
             let cancels = (self.cancelsByPid[pid] ?? 0) + 1
             self.cancelsByPid[pid] = cancels
             if cancels >= Self.maxCancelsPerApp {
