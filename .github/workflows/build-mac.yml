@@ -1,0 +1,57 @@
+name: Build macOS app
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode version
+        run: xcodebuild -version
+
+      # Ad-hoc signing (CODE_SIGN_IDENTITY="-") so no Apple Developer account
+      # or team is needed. The project's own "Apple Development" signing
+      # settings are overridden here.
+      - name: Build
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project MagicQuit.xcodeproj \
+            -scheme MagicQuit \
+            -configuration Release \
+            -derivedDataPath .build-ci \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            DEVELOPMENT_TEAM="" \
+            clean build
+
+      - name: Run unit tests
+        run: |
+          set -euo pipefail
+          xcodebuild test \
+            -project MagicQuit.xcodeproj \
+            -scheme MagicQuit \
+            -destination 'platform=macOS' \
+            -derivedDataPath .build-ci \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            DEVELOPMENT_TEAM=""
+
+      - name: Package zip
+        run: |
+          cd .build-ci/Build/Products/Release
+          ditto -c -k --sequesterRsrc --keepParent MagicQuit.app MagicQuit.zip
+          unzip -l MagicQuit.zip | head -5
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MagicQuit-macOS
+          path: .build-ci/Build/Products/Release/MagicQuit.zip
+          if-no-files-found: error
