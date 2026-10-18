@@ -67,10 +67,11 @@ final class AppSettings: ObservableObject {
         showQuitButton = defaults.bool(forKey: Keys.showQuitButton)
         quitOnLastWindowClosed = defaults.bool(forKey: Keys.quitOnLastWindowClosed)
         confirmBeforeAutoQuit = defaults.object(forKey: Keys.confirmBeforeAutoQuit) as? Bool ?? true
-        excludedApps = Set(defaults.stringArray(forKey: Keys.excludedApps) ?? [])
-        if excludedApps.isEmpty {
-            excludedApps = AppSettings.defaultExcludedApps
+        var initialExcluded = Set(defaults.stringArray(forKey: Keys.excludedApps) ?? [])
+        if initialExcluded.isEmpty {
+            initialExcluded = AppSettings.defaultExcludedApps
         }
+        excludedApps = initialExcluded
 
         if let data = defaults.data(forKey: Keys.legacyToggles),
            let toggles = try? JSONDecoder().decode([String: Bool].self, from: data) {
