@@ -96,11 +96,11 @@ final class RunningAppsManager: ObservableObject {
             Task { @MainActor [weak self] in self?.creditPausedTime() }
         })
         // Fast user switching: treat session switch like sleep/lock.
-        let workspaceCenter = NSWorkspace.shared.notificationCenter
-        observerTokens.append(workspaceCenter.addObserver(forName: NSWorkspace.sessionDidResignActiveNotification, object: nil, queue: .main) { _ in
+        // Raw names because the typed NSWorkspace.sessionDidResignActive API is macOS 26+.
+        observerTokens.append(center.addObserver(forName: Notification.Name("NSWorkspaceSessionDidResignActiveNotification"), object: nil, queue: .main) { _ in
             Task { @MainActor [weak self] in self?.pauseTimers() }
         })
-        observerTokens.append(workspaceCenter.addObserver(forName: NSWorkspace.sessionDidBecomeActiveNotification, object: nil, queue: .main) { _ in
+        observerTokens.append(center.addObserver(forName: Notification.Name("NSWorkspaceSessionDidBecomeActiveNotification"), object: nil, queue: .main) { _ in
             Task { @MainActor [weak self] in self?.creditPausedTime() }
         })
 
