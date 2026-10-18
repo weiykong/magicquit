@@ -95,6 +95,14 @@ final class RunningAppsManager: ObservableObject {
         distributedTokens.append(distributed.addObserver(forName: Notification.Name("com.apple.screenIsUnlocked"), object: nil, queue: .main) { _ in
             Task { @MainActor [weak self] in self?.creditPausedTime() }
         })
+        // Fast user switching: treat session switch like sleep/lock.
+        let workspaceCenter = NSWorkspace.shared.notificationCenter
+        observerTokens.append(workspaceCenter.addObserver(forName: NSWorkspace.sessionDidResignActiveNotification, object: nil, queue: .main) { _ in
+            Task { @MainActor [weak self] in self?.pauseTimers() }
+        })
+        observerTokens.append(workspaceCenter.addObserver(forName: NSWorkspace.sessionDidBecomeActiveNotification, object: nil, queue: .main) { _ in
+            Task { @MainActor [weak self] in self?.creditPausedTime() }
+        })
 
         sweepTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { _ in
             Task { @MainActor [weak self] in self?.sweep() }
@@ -308,15 +316,15 @@ final class RunningAppsManager: ObservableObject {
 
     func isIdleQuitEnabled(_ app: NSRunningApplication) -> Bool {
         guard let key = exclusionKey(for: app) else { return true }
-        return !settings.idleQuitExcluded.contains(key)
+        return !settings.excludedApps.contains(key)
     }
 
     func setIdleQuitEnabled(_ enabled: Bool, for app: NSRunningApplication) {
         guard let key = exclusionKey(for: app) else { return }
         if enabled {
-            settings.idleQuitExcluded.remove(key)
+            settings.excludedApps.remove(key)
         } else {
-            settings.idleQuitExcluded.insert(key)
+            settings.excludedApps.insert(key)
         }
     }
 }
