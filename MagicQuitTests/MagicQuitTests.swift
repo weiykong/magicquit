@@ -102,7 +102,6 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertFalse(settings.showQuitButton)
         XCTAssertFalse(settings.quitOnLastWindowClosed)
         XCTAssertTrue(settings.confirmBeforeAutoQuit)
-        XCTAssertTrue(settings.excludedApps.isEmpty)
         XCTAssertEqual(settings.excludedApps, AppSettings.defaultExcludedApps)
     }
 
@@ -163,11 +162,20 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertFalse(reloaded.confirmBeforeAutoQuit)
     }
 
-    func testEmptiedWindowExclusionsStayEmpty() {
+    func testEmptiedExclusionsStayEmpty() {
         let settings = AppSettings(defaults: defaults)
         for id in AppSettings.defaultExcludedApps {
             settings.excludedApps.remove(id)
         }
         XCTAssertTrue(AppSettings(defaults: defaults).excludedApps.isEmpty)
+    }
+
+    func testLegacyTwoListsMergeIntoUnifiedSet() {
+        defaults.set(["com.apple.Safari"], forKey: "idleQuitExcludedApps")
+        defaults.set(["com.example.tool"], forKey: "windowQuitExcludedApps")
+        let merged = AppSettings(defaults: defaults).excludedApps
+        XCTAssertTrue(merged.contains("com.apple.Safari"))
+        XCTAssertTrue(merged.contains("com.example.tool"))
+        XCTAssertTrue(merged.contains("com.spotify.client")) // defaults preserved
     }
 }

@@ -67,11 +67,16 @@ final class AppSettings: ObservableObject {
         showQuitButton = defaults.bool(forKey: Keys.showQuitButton)
         quitOnLastWindowClosed = defaults.bool(forKey: Keys.quitOnLastWindowClosed)
         confirmBeforeAutoQuit = defaults.object(forKey: Keys.confirmBeforeAutoQuit) as? Bool ?? true
-        var initialExcluded = Set(defaults.stringArray(forKey: Keys.excludedApps) ?? [])
-        if initialExcluded.isEmpty {
-            initialExcluded = AppSettings.defaultExcludedApps
+        // Distinguish a fresh install (seed defaults) from a user who emptied
+        // the list (must stay empty). Existing users' two old lists merge in.
+        if let stored = defaults.stringArray(forKey: Keys.excludedApps) {
+            excludedApps = Set(stored)
+        } else {
+            var merged = AppSettings.defaultExcludedApps
+            merged.formUnion(defaults.stringArray(forKey: "idleQuitExcludedApps") ?? [])
+            merged.formUnion(defaults.stringArray(forKey: "windowQuitExcludedApps") ?? [])
+            excludedApps = merged
         }
-        excludedApps = initialExcluded
 
         if let data = defaults.data(forKey: Keys.legacyToggles),
            let toggles = try? JSONDecoder().decode([String: Bool].self, from: data) {
