@@ -140,7 +140,7 @@ final class WindowWatcher {
         // The menu checkbox means "never quit this app" — it protects against
         // both quit mechanisms, matching what it meant in 1.x.
         if let key = app.bundleIdentifier ?? app.executableURL?.path,
-           settings.windowQuitExcluded.contains(key) || settings.idleQuitExcluded.contains(key) {
+           settings.excludedApps.contains(key) {
             log.debug("windowCheck \(name, privacy: .public): excluded")
             return
         }

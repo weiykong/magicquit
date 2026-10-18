@@ -102,8 +102,8 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertFalse(settings.showQuitButton)
         XCTAssertFalse(settings.quitOnLastWindowClosed)
         XCTAssertTrue(settings.confirmBeforeAutoQuit)
-        XCTAssertTrue(settings.idleQuitExcluded.isEmpty)
-        XCTAssertEqual(settings.windowQuitExcluded, AppSettings.defaultWindowQuitExcluded)
+        XCTAssertTrue(settings.excludedApps.isEmpty)
+        XCTAssertEqual(settings.excludedApps, AppSettings.defaultExcludedApps)
     }
 
     func testLegacyHoursMigration() {
@@ -132,32 +132,32 @@ final class AppSettingsTests: XCTestCase {
 
         let settings = AppSettings(defaults: defaults)
         settings.migrateLegacyToggleIfNeeded(appName: "Safari", bundleId: "com.apple.Safari")
-        XCTAssertTrue(settings.idleQuitExcluded.contains("com.apple.Safari"))
+        XCTAssertTrue(settings.excludedApps.contains("com.apple.Safari"))
 
         // Enabled legacy entries do not create exclusions
         settings.migrateLegacyToggleIfNeeded(appName: "Mail", bundleId: "com.apple.mail")
-        XCTAssertFalse(settings.idleQuitExcluded.contains("com.apple.mail"))
+        XCTAssertFalse(settings.excludedApps.contains("com.apple.mail"))
 
         // Fully consumed legacy storage is removed
         XCTAssertNil(defaults.data(forKey: "com.MagicQuit.toggleStatus"))
 
         // Consuming again is a no-op
-        settings.idleQuitExcluded.remove("com.apple.Safari")
+        settings.excludedApps.remove("com.apple.Safari")
         settings.migrateLegacyToggleIfNeeded(appName: "Safari", bundleId: "com.apple.Safari")
-        XCTAssertFalse(settings.idleQuitExcluded.contains("com.apple.Safari"))
+        XCTAssertFalse(settings.excludedApps.contains("com.apple.Safari"))
     }
 
     func testExclusionPersistenceRoundtrip() {
         let settings = AppSettings(defaults: defaults)
-        settings.idleQuitExcluded.insert("com.apple.Safari")
-        settings.windowQuitExcluded.insert("com.example.tool")
+        settings.excludedApps.insert("com.apple.Safari")
+        settings.excludedApps.insert("com.example.tool")
         settings.idleMinutes = 120
         settings.quitOnLastWindowClosed = true
         settings.confirmBeforeAutoQuit = false
 
         let reloaded = AppSettings(defaults: defaults)
-        XCTAssertTrue(reloaded.idleQuitExcluded.contains("com.apple.Safari"))
-        XCTAssertTrue(reloaded.windowQuitExcluded.contains("com.example.tool"))
+        XCTAssertTrue(reloaded.excludedApps.contains("com.apple.Safari"))
+        XCTAssertTrue(reloaded.excludedApps.contains("com.example.tool"))
         XCTAssertEqual(reloaded.idleMinutes, 120)
         XCTAssertTrue(reloaded.quitOnLastWindowClosed)
         XCTAssertFalse(reloaded.confirmBeforeAutoQuit)
@@ -165,9 +165,9 @@ final class AppSettingsTests: XCTestCase {
 
     func testEmptiedWindowExclusionsStayEmpty() {
         let settings = AppSettings(defaults: defaults)
-        for id in AppSettings.defaultWindowQuitExcluded {
-            settings.windowQuitExcluded.remove(id)
+        for id in AppSettings.defaultExcludedApps {
+            settings.excludedApps.remove(id)
         }
-        XCTAssertTrue(AppSettings(defaults: defaults).windowQuitExcluded.isEmpty)
+        XCTAssertTrue(AppSettings(defaults: defaults).excludedApps.isEmpty)
     }
 }

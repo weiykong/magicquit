@@ -82,7 +82,7 @@ struct SettingsView: View {
                 SettingsDivider()
 
                 SettingRow(
-                    icon: "timer",
+                    icon: "hourglass",
                     title: "Confirm before quitting",
                     detail: "Show a 20-second countdown banner with a Cancel button before automatic quits."
                 ) {
@@ -171,7 +171,7 @@ struct SettingsView: View {
                     bundleIds: sortedExcludedApps,
                     displayName: displayName(for:),
                     icon: icon(for:),
-                    remove: { settings.windowQuitExcluded.remove($0) }
+                    remove: { settings.excludedApps.remove($0) }
                 )
             }
         }
@@ -180,7 +180,7 @@ struct SettingsView: View {
     }
 
     private var sortedExcludedApps: [String] {
-        settings.windowQuitExcluded.sorted {
+        settings.excludedApps.sorted {
             displayName(for: $0).localizedCaseInsensitiveCompare(displayName(for: $1)) == .orderedAscending
         }
     }
@@ -216,7 +216,7 @@ struct SettingsView: View {
 
         for url in panel.urls {
             if let bundleId = Bundle(url: url)?.bundleIdentifier {
-                settings.windowQuitExcluded.insert(bundleId)
+                settings.excludedApps.insert(bundleId)
             }
         }
     }

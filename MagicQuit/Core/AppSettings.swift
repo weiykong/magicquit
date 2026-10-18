@@ -9,8 +9,7 @@ final class AppSettings: ObservableObject {
         static let showQuitButton = "showCloseButton" // key kept from 1.x
         static let quitOnLastWindowClosed = "quitOnLastWindowClosed"
         static let confirmBeforeAutoQuit = "confirmBeforeAutoQuit"
-        static let idleQuitExcluded = "idleQuitExcludedApps"
-        static let windowQuitExcluded = "windowQuitExcludedApps"
+        static let excludedApps = "excludedApps" // unified (was excludedApps + excludedApps)
         static let legacyHours = "hoursUntilClose"
         static let legacyToggles = "com.MagicQuit.toggleStatus"
     }
@@ -41,15 +40,15 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(confirmBeforeAutoQuit, forKey: Keys.confirmBeforeAutoQuit) }
     }
 
-    /// Bundle identifiers excluded from idle quitting (menu checkboxes).
-    @Published var idleQuitExcluded: Set<String> {
-        didSet { defaults.set(Array(idleQuitExcluded).sorted(), forKey: Keys.idleQuitExcluded) }
+    /// Bundle identifiers for apps never quit by either mechanism (unified from idle/window exclusions).
+    @Published var excludedApps: Set<String> {
+        didSet { defaults.set(Array(excludedApps).sorted(), forKey: Keys.excludedApps) }
     }
 
-    /// Bundle identifiers excluded from quit-on-last-window-closed.
-    @Published var windowQuitExcluded: Set<String> {
-        didSet { defaults.set(Array(windowQuitExcluded).sorted(), forKey: Keys.windowQuitExcluded) }
-    }
+    /// Default exclusions for window-close quitting (media players); menu checkbox also protects them.
+    static let defaultExcludedApps: Set<String> = [
+        "com.apple.Music", "com.spotify.client", "com.apple.podcasts", "org.videolan.vlc"
+    ]
 
     /// 1.x stored per-app enablement keyed by localized app name; consumed lazily as apps appear.
     private var legacyTogglesByName: [String: Bool]
@@ -68,12 +67,9 @@ final class AppSettings: ObservableObject {
         showQuitButton = defaults.bool(forKey: Keys.showQuitButton)
         quitOnLastWindowClosed = defaults.bool(forKey: Keys.quitOnLastWindowClosed)
         confirmBeforeAutoQuit = defaults.object(forKey: Keys.confirmBeforeAutoQuit) as? Bool ?? true
-        idleQuitExcluded = Set(defaults.stringArray(forKey: Keys.idleQuitExcluded) ?? [])
-
-        if let stored = defaults.stringArray(forKey: Keys.windowQuitExcluded) {
-            windowQuitExcluded = Set(stored)
-        } else {
-            windowQuitExcluded = AppSettings.defaultWindowQuitExcluded
+        excludedApps = Set(defaults.stringArray(forKey: Keys.excludedApps) ?? [])
+        if excludedApps.isEmpty {
+            excludedApps = AppSettings.defaultExcludedApps
         }
 
         if let data = defaults.data(forKey: Keys.legacyToggles),
@@ -89,7 +85,7 @@ final class AppSettings: ObservableObject {
         guard let appName, let bundleId,
               let enabled = legacyTogglesByName.removeValue(forKey: appName) else { return }
         if !enabled {
-            idleQuitExcluded.insert(bundleId)
+            excludedApps.insert(bundleId)
         }
         persistLegacyToggles()
     }
