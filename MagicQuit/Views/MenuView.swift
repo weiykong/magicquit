@@ -52,6 +52,40 @@ struct MenuView: View {
             .padding(.bottom, 6)
         }
         .frame(width: 320)
+        // The window-style menu bar popover keeps its previous height, so after
+        // the list shrinks (apps quit, or the Accessibility row disappears) it
+        // leaves a blank gap below the content. Report the content's ideal
+        // height and shrink the popover to match.
+        .background {
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear { resizePopover(toHeight: proxy.size.height) }
+                    .onChange(of: proxy.size.height) { _, height in resizePopover(toHeight: height) }
+            }
+        }
+    }
+
+    /// Shrinks the menu bar popover window to the content's height. Only shrinks:
+    /// growing is left to the system, which already expands the popover for new rows.
+    private func resizePopover(toHeight height: CGFloat) {
+        guard height > 1, let window = menuBarPopoverWindow() else { return }
+        guard window.frame.height - height > 1 else { return }
+        var frame = window.frame
+        // Keep the top edge pinned under the menu bar; only the bottom moves up.
+        frame.origin.y += frame.size.height - height
+        frame.size.height = height
+        window.setFrame(frame, display: true, animate: false)
+    }
+
+    /// The popover SwiftUI creates for a `.window`-style menu bar extra: a
+    /// borderless, non-activating window (its class name is private, so match on
+    /// behavior instead).
+    private func menuBarPopoverWindow() -> NSWindow? {
+        NSApp.windows.first { window in
+            window.styleMask.contains(.borderless)
+                && window.styleMask.contains(.nonactivatingPanel)
+                && window.level == .statusBar
+        }
     }
 }
 
