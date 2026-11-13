@@ -6,6 +6,10 @@ struct MenuView: View {
     @EnvironmentObject private var settings: AppSettings
     @Environment(\.openSettings) private var openSettings
 
+    /// Popover content width. Also the fingerprint `menuBarPopoverWindow()`
+    /// uses to recognise the popover window, so keep the two in sync.
+    static let menuWidth: CGFloat = 320
+
     private var sortedApps: [RunningAppsManager.TrackedApp] {
         manager.tracked.values.sorted {
             ($0.app.localizedName ?? "").localizedCaseInsensitiveCompare($1.app.localizedName ?? "") == .orderedAscending
@@ -51,11 +55,12 @@ struct MenuView: View {
             }
             .padding(.bottom, 6)
         }
-        .frame(width: 320)
+        .frame(width: Self.menuWidth)
         // The window-style menu bar popover keeps its previous height, so after
         // the list shrinks (apps quit, or the Accessibility row disappears) it
-        // leaves a blank gap below the content. Report the content's ideal
-        // height and shrink the popover to match.
+        // leaves blank bands above and below the content, because the vibrancy
+        // material is only drawn behind the shrunken content. Report the
+        // content's ideal height and shrink the popover to match.
         .background {
             GeometryReader { proxy in
                 Color.clear
@@ -67,17 +72,20 @@ struct MenuView: View {
 
     /// Shrinks the menu bar popover window to the content's height. Only shrinks:
     /// growing is left to the system, which already expands the popover for new rows.
+    ///
+    /// The resize is deferred: SwiftUI's own `.window` popover sizing runs at the
+    /// end of the same update cycle, and resizing inline raced it — when a row
+    /// disappeared (an app quit) it could leave the window's vibrancy chrome a
+    /// frame behind the shrunk NSWindow. Running after SwiftUI's own pass fixes
+    /// that.
+    ///
+    /// NOTE: this silently did nothing for a while, because `menuBarPopoverWindow()`
+    /// filtered on `window.level == .statusBar` while macOS 26 puts the popover at
+    /// `.popUpMenu` (101). Measured live: the popover kept its 137 pt height after
+    /// a row disappeared and showed two transparent bands (top ~10 pt, bottom
+    /// ~15 pt). If the bands come back, check the window match first, the timing
+    /// second.
     private func resizePopover(toHeight height: CGFloat) {
-        // Deferred: SwiftUI's own `.window` popover sizing runs at the end of
-        // this update cycle too. Resizing inline raced it and, when a row
-        // disappeared (an app quit), could leave the window's vibrancy chrome
-        // a frame behind the shrunk NSWindow — a transparent gap where the
-        // row used to be. Running after SwiftUI's own pass fixes that.
-        //
-        // A faint hairline can still show at the top/bottom edges right after
-        // a quit-triggered shrink. invalidateShadow() and routing the frame
-        // change through a Core Animation transaction didn't remove it; it's
-        // cosmetic only, so left as a known issue rather than chased further.
         DispatchQueue.main.async {
             guard height > 1, let window = menuBarPopoverWindow() else { return }
             guard window.frame.height - height > 1 else { return }
@@ -92,11 +100,24 @@ struct MenuView: View {
     /// The popover SwiftUI creates for a `.window`-style menu bar extra: a
     /// borderless, non-activating window (its class name is private, so match on
     /// behavior instead).
+    ///
+    /// Do NOT match on `window.level`: it is not stable across macOS versions.
+    /// Measured live on macOS 26 the popover sits at level 101
+    /// (`.popUpMenu`), not `.statusBar` (25), so a level check silently matches
+    /// nothing, `resizePopover` bails at its guard, and the popover keeps the
+    /// height it had before the list shrank — which renders as two transparent
+    /// bands, one above and one below the content, because the vibrancy
+    /// material is only drawn behind the shrunken content.
+    ///
+    /// Match on the panel style plus the popover's own content width instead.
+    /// The countdown banner is also a borderless non-activating panel but is
+    /// 290 pt wide, so the width check keeps it out.
     private func menuBarPopoverWindow() -> NSWindow? {
         NSApp.windows.first { window in
             window.styleMask.contains(.borderless)
                 && window.styleMask.contains(.nonactivatingPanel)
-                && window.level == .statusBar
+                && window.isVisible
+                && abs(window.frame.width - Self.menuWidth) < 2
         }
     }
 }
