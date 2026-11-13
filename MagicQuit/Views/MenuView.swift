@@ -68,13 +68,25 @@ struct MenuView: View {
     /// Shrinks the menu bar popover window to the content's height. Only shrinks:
     /// growing is left to the system, which already expands the popover for new rows.
     private func resizePopover(toHeight height: CGFloat) {
-        guard height > 1, let window = menuBarPopoverWindow() else { return }
-        guard window.frame.height - height > 1 else { return }
-        var frame = window.frame
-        // Keep the top edge pinned under the menu bar; only the bottom moves up.
-        frame.origin.y += frame.size.height - height
-        frame.size.height = height
-        window.setFrame(frame, display: true, animate: false)
+        // Deferred: SwiftUI's own `.window` popover sizing runs at the end of
+        // this update cycle too. Resizing inline raced it and, when a row
+        // disappeared (an app quit), could leave the window's vibrancy chrome
+        // a frame behind the shrunk NSWindow — a transparent gap where the
+        // row used to be. Running after SwiftUI's own pass fixes that.
+        //
+        // A faint hairline can still show at the top/bottom edges right after
+        // a quit-triggered shrink. invalidateShadow() and routing the frame
+        // change through a Core Animation transaction didn't remove it; it's
+        // cosmetic only, so left as a known issue rather than chased further.
+        DispatchQueue.main.async {
+            guard height > 1, let window = menuBarPopoverWindow() else { return }
+            guard window.frame.height - height > 1 else { return }
+            var frame = window.frame
+            // Keep the top edge pinned under the menu bar; only the bottom moves up.
+            frame.origin.y += frame.size.height - height
+            frame.size.height = height
+            window.setFrame(frame, display: true, animate: false)
+        }
     }
 
     /// The popover SwiftUI creates for a `.window`-style menu bar extra: a
