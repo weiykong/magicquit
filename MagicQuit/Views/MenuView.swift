@@ -10,6 +10,10 @@ struct MenuView: View {
     /// uses to recognise the popover window, so keep the two in sync.
     static let menuWidth: CGFloat = 320
 
+    /// Popover content height, as measured by the `GeometryReader` in the
+    /// background. Re-asserted on every render tick; see `resizePopover`.
+    @State private var contentHeight: CGFloat = 0
+
     private var sortedApps: [RunningAppsManager.TrackedApp] {
         manager.tracked.values.sorted {
             ($0.app.localizedName ?? "").localizedCaseInsensitiveCompare($1.app.localizedName ?? "") == .orderedAscending
@@ -19,19 +23,28 @@ struct MenuView: View {
     var body: some View {
         VStack(spacing: 0) {
             TimelineView(.periodic(from: .now, by: 1)) { context in
-                let rows = VStack(spacing: 2) {
-                    ForEach(sortedApps) { entry in
-                        AppRowView(entry: entry, now: context.date)
+                Group {
+                    let rows = VStack(spacing: 2) {
+                        ForEach(sortedApps) { entry in
+                            AppRowView(entry: entry, now: context.date)
+                        }
                     }
-                }
-                if sortedApps.count > 12 {
-                    ScrollView {
+                    if sortedApps.count > 12 {
+                        ScrollView {
+                            rows
+                        }
+                        .frame(height: 420)
+                    } else {
                         rows
                     }
-                    .frame(height: 420)
-                } else {
-                    rows
                 }
+                // The rows already re-render every second, so reuse that tick to
+                // re-assert the height. A content-height *change* is the only
+                // thing that triggers `onChange` below, so if the window ever ends
+                // up the wrong height without the content changing again -- e.g.
+                // SwiftUI's own sizing pass lands after ours -- the mismatch would
+                // sit there until the popover was closed and reopened.
+                .onChange(of: context.date) { _, _ in resizePopover(toHeight: contentHeight) }
             }
             .padding(.horizontal, 10)
             .padding(.top, 8)
@@ -64,20 +77,28 @@ struct MenuView: View {
         .background {
             GeometryReader { proxy in
                 Color.clear
-                    .onAppear { resizePopover(toHeight: proxy.size.height) }
-                    .onChange(of: proxy.size.height) { _, height in resizePopover(toHeight: height) }
+                    .onAppear {
+                        contentHeight = proxy.size.height
+                        resizePopover(toHeight: proxy.size.height)
+                    }
+                    .onChange(of: proxy.size.height) { _, height in
+                        contentHeight = height
+                        resizePopover(toHeight: height)
+                    }
             }
         }
     }
 
-    /// Shrinks the menu bar popover window to the content's height. Only shrinks:
-    /// growing is left to the system, which already expands the popover for new rows.
+    /// Makes the menu bar popover window match the content's height, in either
+    /// direction: it both shrinks after rows disappear and grows when the window
+    /// ends up shorter than its content (clipped rows).
     ///
     /// The resize is deferred: SwiftUI's own `.window` popover sizing runs at the
     /// end of the same update cycle, and resizing inline raced it — when a row
     /// disappeared (an app quit) it could leave the window's vibrancy chrome a
     /// frame behind the shrunk NSWindow. Running after SwiftUI's own pass fixes
-    /// that.
+    /// that. The 1 s render tick repeats the correction so a mismatch can never
+    /// persist.
     ///
     /// NOTE: this silently did nothing for a while, because `menuBarPopoverWindow()`
     /// filtered on `window.level == .statusBar` while macOS 26 puts the popover at
@@ -88,9 +109,11 @@ struct MenuView: View {
     private func resizePopover(toHeight height: CGFloat) {
         DispatchQueue.main.async {
             guard height > 1, let window = menuBarPopoverWindow() else { return }
-            guard window.frame.height - height > 1 else { return }
+            // 1 pt tolerance: the content height is fractional, and snapping to it
+            // every second must not oscillate around the last pixel.
+            guard abs(window.frame.height - height) > 1 else { return }
             var frame = window.frame
-            // Keep the top edge pinned under the menu bar; only the bottom moves up.
+            // Keep the top edge pinned under the menu bar; only the bottom moves.
             frame.origin.y += frame.size.height - height
             frame.size.height = height
             window.setFrame(frame, display: true, animate: false)
